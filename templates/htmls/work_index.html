@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block main %}
+
+<div class="work_index">
+
+    {% if request.user.is_authenticated %}
+    <div class="box">
+        <p class="bgc">Edit</p>
+        <p><a href="{% url 'work_create' %}">> Add a new work</a></p>
+    </div>
+    {% endif %}
+
+    <div class="box orderby">
+        <p class="bgc">Sort works by...</p>
+        <div class="orders">
+            <p><a href="{% url 'work_index' %}">Creators</a></p>
+            <p><a href="{% url 'work_index_posted' %}">Posts</a></p>
+            <p><a href="{% url 'work_index_read' %}">Reads</a></p>
+            <p><a href="{% url 'work_index_scened' %}">Scenes</a></p>
+        </div>
+    </div>
+
+    {% if index %}<p class="bgc">Sorted by creators</p>
+    {% elif index_posted %}<p class="bgc">Sorted by posts</p>
+    {% elif index_read %}<p class="bgc">Sorted by reads</p>
+    {% elif index_scened %}<p class="bgc">Sorted by scenes</p>
+    {% endif %}
+
+    {% if work_search %}
+
+        {% if search_results %}
+
+            <p class="bold bgc">Search Results for "{{ search_query }}"</p>
+            <div class="box">
+                <p><a href="{% url 'work_index' %}">> Reset the search.</a></p>
+            </div>
+            {% for work in search_results %}
+                <div class="work">
+                    <p><a href="{% url 'work_detail' pk=work.pk %}">{{ work.title }}</a>: {{ work.creator }}</p>
+                </div>
+            {% endfor %}
+
+        {% else %}
+
+            <p class="bold bgc">"{{ search_query }}" was not found.</p>
+            <p><a href="{% url 'work_index' %}">> Reset the search.</a></p>
+
+        {% endif %}
+
+    {% else %}
+
+        {% if index %}
+        <form method="get" action="{% url 'work_search' %}">
+            <input type="text" name="q">
+            <button type="submit">Search</button>
+        </form>
+        {% endif %}
+
+        {% for work in works %}
+
+            <div class="work">
+                {% if index %}<p><a href="{% url 'work_detail' pk=work.pk %}">{{ work.title }}</a>: {{ work.creator }}</p>
+                {% elif index_posted %}<p><a href="{% url 'work_detail' pk=work.pk %}">{{ work.title }}</a>{% if work.post_count != 0 %} ( {{ work.post_count }} posts ){% endif %}</p>
+                {% elif index_read %}<p><a href="{% url 'work_detail_scene' pk=work.pk %}">{{ work.title }}</a>{% if work.read_count != 0 %} ( {{ work.read_count }} reads ){% endif %}</p>
+                {% elif index_scened %}<p><a href="{% url 'work_detail_scene' pk=work.pk %}">{{ work.title }}</a>{% if work.scened_count != 0 %} ( {{ work.scened_count }} scenes ){% endif %}</p>
+                {% endif %}
+            </div>
+
+        {% endfor %}
+
+        {% include 'htmls/basic_pagination.html' %}
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

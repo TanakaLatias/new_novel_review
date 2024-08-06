@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block main %}
+
+<div class="work_detail">
+
+    <div class="work_info">
+        <p class="bgc">Work's info</p>
+        <p>Title: {{ the_work.title }}</p>
+        <p>Creator: {{ the_work.creator }}</p>
+    </div>
+
+    {% if work_detail_scene %}
+
+        <div class="box">
+            <p class="bgc">Read Count</p>
+            <p>Read: {{ reads_count }}</p>
+            {% if user.is_authenticated %}
+                {% if read %}
+                <form method="get" action="{% url 'read_delete' pk=read.pk %}">{% csrf_token %}
+                    <button type="submit" class="pink">- unread</button>
+                </form>
+                {% else %}
+                <form method="post" action="{% url 'read_create' pk=the_work.pk %}">{% csrf_token %}
+                    <button type="submit">+ read</button>
+                </form>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <p class="bgc">Scenes</p>
+        {% for scene in scenes %}
+
+        <div class="scene">
+            <p>{{ scene.poll_count }}: {{ scene }}</p>
+
+            {% if user.is_authenticated %}
+                {% if scene.pk in polls_dict %}
+                    {% for key, value in polls_dict.items %}
+                        {% if key == scene.pk %}
+                        <form method="get" action="{% url 'poll_delete' pk=value %}">{% csrf_token %}
+                            <button type="submit" class="pink">- unpoll</button>
+                        </form>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                <form method="post" action="{% url 'poll_create' pk=scene.pk %}">{% csrf_token %}
+                    <button type="submit">+ poll</button>
+                </form>
+                {% endif %}
+                {% if scene.user == request.user %}
+                    <p><a href="{% url 'scene_delete' pk=scene.pk %}">( Delete this scene. )</a></p>
+                {% endif %}
+            {% endif %}
+        </div>
+        
+        {% endfor %}
+        {% if scenes %}{% include 'htmls/basic_pagination.html' %}{% else %}<p>None yet.</p>{% endif %}
+
+    {% elif work_detail %}
+
+        <div class="box">
+            <p class="bgc">Post(s) for this work</p>
+
+            {% for post in posts %}
+            <div class="record">
+                <p><a href="{% url 'post_detail' pk=post.pk %}">{{ post.title }}</a></p>
+            </div>
+            {% endfor %}
+            {% if posts %}{% include 'htmls/basic_pagination.html' %}{% else %}<p>None yet.</p>{% endif %}
+            
+        </div>
+
+    {% endif %}
+
+    {% if user.is_authenticated %}
+    <div class="box">
+        <p class="bgc">Edit</p>
+        <p><a href="{% url 'work_update' pk=the_work.pk %}">> Update</a></p>
+        {% if your_post %}
+            <p><a href="{% url 'post_detail' pk=your_post.pk %}">> Your post ({{ your_post.title }})</a></p>
+        {% elif work_detail %}
+            <p><a href="{% url 'post_create' pk=the_work.pk %}">> Create a post</a></p>
+        {% elif work_detail_scene %}
+            <p><a href="{% url 'scene_create' pk=the_work.pk %}">> Create a scene</a></p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="box">
+        <p class="bgc">Return</p>
+        <p><a href="{% url 'work_index' %}">> Works</a></p>
+        <p><a href="{% url 'work_detail' pk=the_work.pk %}">> See post(s) for this work</a></p>
+        <p><a href="{% url 'work_detail_scene' pk=the_work.pk %}">> See scene(s) for this work</a></p>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,75 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/styles.css' %}">
+    <title>Story Memo</title>
+</head>
+<body>
+
+    <header>
+        <p id="title" class="bold">Story Memo</p>
+            <nav id="nav">
+                <ul>
+                    <li><a href="{% url 'top' %}" class="bold">Story Memo</a></li>
+                    {% if request.user.is_authenticated %}
+                    <li><a href="{% url 'user_detail' pk=request.user.pk %}">Your Page</a></li>
+                    <li><a href="{% url 'account_logout' %}">Log Out</a></li>
+                    {% else %}
+                    <li><a href="{% url 'account_login' %}">Log In</a></li>
+                    <li><a href="{% url 'account_signup' %}">Register</a></li>
+                    {% endif %}
+                    <li><a href="{% url 'work_index' %}">Works</a></li>
+                    <li><a href="{% url 'post_index' %}">Posts</a></li>
+                </ul>
+            </nav>
+    </header>
+
+    <main>
+
+        <div class="main">{% block main %}{% endblock %}</div>
+
+        <div class="side">
+            <ul>
+                <p class="bold bgc">Newly added</p>
+                {% for work in side_works %}
+                    <p><a href="{% url 'work_detail' pk=work.pk %}">{{ work.title }}</a></p>
+                {% endfor %}
+            </ul>
+            <ul>
+                <p class="bold bgc">Newly read</p>
+                {% for read in side_reads %}
+                    <p><a href="{% url 'work_detail_scene' pk=read.work.pk %}">{{ read.work.title }}</a></p>
+                {% endfor %}
+            </ul>
+            <ul>
+                <p class="bold bgc">Newly polled</p>
+                {% for poll in side_polls %}
+                    <p><a href="{% url 'work_detail_scene' pk=poll.scene.work.pk %}">{{ poll.scene.title }}</a></p>
+                {% endfor %}
+            </ul>
+        </div>
+
+    </main>
+
+    <footer>
+        <p>Special Thanks</p>
+        <p>To playground Sama For Teaching Me Django</p>
+    </footer>
+
+    <script>
+        function ham() {
+            document.getElementById('nav').classList.toggle('in');
+        }
+        document.getElementById('title').addEventListener('click' , function () {
+            ham();
+        } );
+    </script>
+
+</body>
+
+</html>
