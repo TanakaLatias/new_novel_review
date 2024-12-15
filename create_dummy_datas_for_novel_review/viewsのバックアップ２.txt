@@ -1,0 +1,558 @@
+from django.shortcuts import reverse, redirect, get_object_or_404
+from time import timezone
+import datetime
+from django.utils import timezone
+from django.urls import reverse_lazy
+from django.contrib.auth import login
+from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.views import LoginView, LogoutView
+from django.views import View
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .forms import MyUserCreationForm, MyUserChangeForm, LoginForm, WorkForm, PostForm, SceneForm
+from .models import User, Work, Scene, Poll, Post, Like, Read, Interested
+from django.db.models import Count, Q
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.db import IntegrityError
+
+class UserCheckMixin:
+    def get(self, request, *args, **kwargs):
+        object = self.get_object()
+        if object.user != self.request.user:
+            return redirect('error')
+        return super().get(request, *args, **kwargs)
+
+class MyCreateView(LoginRequiredMixin, CreateView):
+    template_name = 'htmls/basic_form.html'
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        return super().form_valid(form)
+    
+class MyUpdateView(LoginRequiredMixin, UpdateView):
+    template_name = 'htmls/basic_form.html'
+
+class TopAndIndexView(TemplateView):
+    template_name = 'htmls/top.html'
+
+class LoginView(LoginView):
+    form_class = LoginForm
+    template_name = 'htmls/basic_form.html'
+
+class MyPageView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/my_page.html'
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['my_page'] = 'my_page'
+        me = self.request.user
+        context['user'] = me
+        context['posts'] = Post.objects.filter(user=me).order_by('-pk')[:5]
+        context['likes'] = Like.objects.filter(user=me).order_by('-pk')[:5]
+        context['reads'] = Read.objects.filter(user=me).order_by('-pk')[:5]
+        context['interesteds'] = Interested.objects.filter(user=me).order_by('-pk')[:5]
+        context['posts_count'] = Post.objects.filter(user=me).count()
+        context['likes_count'] = Like.objects.filter(user=me).count()
+        context['reads_count'] = Read.objects.filter(user=me).count()
+        context['interesteds_count'] = Interested.objects.filter(user=me).count()
+        return context
+
+class MyPostsView(LoginRequiredMixin, ListView):
+    model = Post
+    context_object_name = 'posts'
+    template_name = 'htmls/my_page.html'
+    paginate_by = 20
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['my_posts'] = 'my_posts'
+        me = self.request.user
+        context['recent'] =  timezone.now() - datetime.timedelta(days=3)
+        context['posts_count'] = Post.objects.filter(user=me).count()
+        return context
+    def get_queryset(self):
+        me = self.request.user
+        return Post.objects.filter(user=me).order_by('-pk')
+
+class MyLikesView(LoginRequiredMixin, ListView):
+    model = Like
+    context_object_name = 'likes'
+    template_name = 'htmls/my_page.html'
+    paginate_by = 20
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['my_likes'] = 'my_likes'
+        me = self.request.user
+        context['likes_count'] = Like.objects.filter(user=me).count()
+        return context
+    def get_queryset(self):
+        me = self.request.user
+        return Like.objects.filter(user=me).order_by('-pk')
+
+class MyReadsView(LoginRequiredMixin, ListView):
+    model = Read
+    context_object_name = 'reads'
+    template_name = 'htmls/my_page.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['my_reads'] = 'my_reads'
+        me = self.request.user
+        context['reads_count'] = Read.objects.filter(user=me).count()
+        return context
+    def get_queryset(self):
+        me = self.request.user
+        return Read.objects.filter(user=me).order_by('-pk')
+    
+class MyInterestedsView(LoginRequiredMixin, ListView):
+    model = Interested
+    context_object_name = 'interesteds'
+    template_name = 'htmls/my_page.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['my_interesteds'] = 'my_interesteds'
+        me = self.request.user
+        context['interesteds_count'] = Interested.objects.filter(user=me).count()
+        return context
+    def get_queryset(self):
+        me = self.request.user
+        return Interested.objects.filter(user=me).order_by('-pk')
+
+class UserDetailView(DetailView):
+    model = User
+    template_name = 'htmls/user_detail.html'
+    context_object_name = 'user'
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user_detail'] = 'user_detail'
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        context['posts'] = Post.objects.filter(user=the_user, hide=False).order_by('-pk')[:5]
+        context['likes'] = Like.objects.filter(user=the_user, hide=False).order_by('-pk')[:5]
+        context['reads'] = Read.objects.filter(user=the_user, hide=False).order_by('-pk')[:5]
+        context['interesteds'] = Interested.objects.filter(user=the_user, hide=False).order_by('-pk')[:5]
+        context['visible_posts_count'] = Post.objects.filter(user=the_user, hide=False).count()
+        context['visible_likes_count'] = Like.objects.filter(user=the_user, hide=False).count()
+        context['visible_reads_count'] = Read.objects.filter(user=the_user, hide=False).count()
+        context['visible_interesteds_count'] = Interested.objects.filter(user=the_user, hide=False).count()
+        return context
+
+class UserDetailPostsView(ListView):
+    model = Post
+    context_object_name = 'posts'
+    template_name = 'htmls/user_detail.html'
+    paginate_by = 20
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user_detail_posts'] = 'user_detail_posts'
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        context['user'] = the_user
+        context['recent'] =  timezone.now() - datetime.timedelta(days=3)
+        context['visible_posts_count'] = Post.objects.filter(user=the_user, hide=False).count()
+        return context
+    def get_queryset(self):
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        return Post.objects.filter(user=the_user, hide=False).order_by('-pk')
+
+class UserDetailLikesView(ListView):
+    model = Like
+    context_object_name = 'likes'
+    template_name = 'htmls/user_detail.html'
+    paginate_by = 20
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user_detail_likes'] = 'user_detail_likes'
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        context['user'] = the_user
+        context['visible_likes_count'] = Like.objects.filter(user=the_user, hide=False).count()
+        return context
+    def get_queryset(self):
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        return Like.objects.filter(user=the_user, hide=False).order_by('-pk')
+
+class UserDetailReadsView(LoginRequiredMixin, ListView):
+    model = Read
+    context_object_name = 'reads'
+    template_name = 'htmls/user_detail.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user_detail_reads'] = 'user_detail_reads'
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        context['user'] = the_user
+        context['visible_reads_count'] = Read.objects.filter(user=the_user, hide=False).count()
+        return context
+    def get_queryset(self):
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        return Read.objects.filter(user=the_user, hide=False).order_by('-pk')
+
+class UserDetailInterestedsView(LoginRequiredMixin, ListView):
+    model = Interested
+    context_object_name = 'interesteds'
+    template_name = 'htmls/user_detail.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['user_detail_interesteds'] = 'user_detail_interesteds'
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        context['user'] = the_user
+        context['visible_interesteds_count'] = Interested.objects.filter(user=the_user, hide=False).count()
+        return context
+    def get_queryset(self):
+        the_user = User.objects.get(id=self.kwargs.get('pk'))
+        return Interested.objects.filter(user=the_user, hide=False).order_by('-pk')
+
+class UserCreateView(CreateView):
+    model = User
+    form_class = MyUserCreationForm
+    template_name = 'htmls/basic_form.html'
+    success_url = reverse_lazy('top')
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            user = form.save()
+            login(self.request, user)
+            return redirect(reverse('my_page'))
+        except IntegrityError:
+            return redirect(reverse('error'))
+
+class UserUpdateView(LoginRequiredMixin, UpdateView):
+    model = User
+    form_class = MyUserChangeForm
+    template_name = 'htmls/basic_form.html'
+    def get_object(self, queryset=None):
+        return self.request.user
+    def get_success_url(self):
+        return reverse('my_page')
+    
+class WorkIndexView(ListView):
+    model = Work
+    context_object_name = 'works'
+    template_name = 'htmls/work_index.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['index'] = 'index'
+        return context
+    def get_queryset(self):
+        return Work.objects.order_by('author', 'title')
+    
+class WorkIndexPostedView(ListView):
+    model = Work
+    context_object_name = 'works'
+    template_name = 'htmls/work_index.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['index_posted'] = 'index_posted'
+        return context
+    def get_queryset(self):
+        return Work.objects.annotate(post_count=Count('post', filter=Q(post__hide=False))).order_by('-post_count', 'author', 'title')
+    
+class WorkIndexReadView(ListView):
+    model = Work
+    context_object_name = 'works'
+    template_name = 'htmls/work_index.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['index_read'] = 'index_read'
+        return context
+    def get_queryset(self):
+        return Work.objects.annotate(read_count=Count('read', filter=Q(read__hide=False))).order_by('-read_count', '-pk')
+
+class WorkIndexInterestedView(ListView):
+    model = Work
+    context_object_name = 'works'
+    template_name = 'htmls/work_index.html'
+    paginate_by = 50
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['index_interested'] = 'index_interested'
+        return context
+    def get_queryset(self):
+        return Work.objects.annotate(interested_count=Count('interested', filter=Q(interested__hide=False))).order_by('-interested_count', '-pk')
+
+class WorkSearchView(ListView):
+    model = Work
+    context_object_name = 'search_results'
+    template_name = 'htmls/work_index.html'
+    def get_queryset(self):
+        query = self.request.GET.get('q')
+        if query:
+            return Work.objects.filter(Q(title__icontains=query) | Q(author__icontains=query)).order_by('author', 'title')
+        else:
+            return Work.objects.none()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['work_search'] = 'work_search'
+        context['search_query'] = self.request.GET.get('q', '')
+        return context
+
+class WorkDetailView(ListView):
+    model = Post
+    template_name = 'htmls/work_detail.html'
+    context_object_name = 'posts'
+    paginate_by = 20
+    def get_queryset(self):
+        the_work = Work.objects.get(pk=self.kwargs.get('pk'))
+        return Post.objects.filter(work=the_work, hide=False).order_by('-pk')
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        the_work = Work.objects.get(pk=self.kwargs.get('pk'))
+        if self.request.user.is_authenticated:
+            try:
+                read = Read.objects.get(user=self.request.user, work=the_work)
+                context['read'] = read
+            except Read.DoesNotExist:
+                context['read'] = None
+            try:
+                interested = Interested.objects.get(user=self.request.user, work=the_work)
+                context['interested'] = interested
+            except Interested.DoesNotExist:
+                context['interested'] = None
+            query = Post.objects.filter(user=self.request.user, work=the_work)
+            if query.exists():
+                context['your_post'] = Post.objects.get(pk=query.first().pk)
+        else:
+            context['read'] = None
+            context['interested'] = None
+        context['the_work'] = the_work
+        context['reads_count'] = Read.objects.filter(work = the_work, hide=False).count()
+        context['interesteds_count'] = Interested.objects.filter(work = the_work, hide=False).count()
+        return context
+ 
+class WorkCreateView(MyCreateView):
+    model = Work
+    form_class = WorkForm
+    success_url = reverse_lazy('top')
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            return redirect(reverse('work_detail', kwargs={'pk': self.object.pk}))
+        except IntegrityError:
+            return redirect(reverse('error'))
+
+class WorkUpdateView(MyUpdateView):
+    model = Work
+    form_class = WorkForm
+    template_name = 'htmls/basic_form.html'
+    def get_success_url(self):
+        return reverse('work_detail', kwargs={'pk': self.object.pk})
+
+class SceneCreateView(MyCreateView):
+    model = Scene
+    form_class = SceneForm
+    success_url = reverse_lazy('top')
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        default_work = Work.objects.get(pk=self.kwargs.get('pk'))
+        kwargs['default_work'] = default_work
+        return kwargs
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            return redirect(reverse('work_detail',pk=self.kwargs['pk']))
+        except IntegrityError:
+            return redirect(reverse('error'))
+
+class SceneDeleteView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/basic_delete.html'
+    def get_object(self, queryset=None):
+        return Scene.objects.get(pk=self.kwargs['pk'])
+    def post(self, request, *args, **kwargs):
+        scene = get_object_or_404(Scene, pk=self.kwargs['pk'])
+        scene.delete()
+        return redirect(reverse_lazy('work_detail', kwargs={'pk': scene.work.pk}))
+    
+class PollCreateView(LoginRequiredMixin, CreateView):
+    model = Poll
+    fields = []
+    template_name = 'htmls/basic_form.html'
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        scene = Scene.objects.get(pk=self.kwargs['pk'])
+        form.instance.scene = scene
+        try:
+            form.save()
+            return redirect('work_detail', pk=scene.work.pk)
+        except IntegrityError:
+            return redirect('error')
+        
+class PollDeleteView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/basic_delete.html'
+    def get_object(self, queryset=None):
+        return Poll.objects.get(pk=self.kwargs['pk'])
+    def post(self, request, *args, **kwargs):
+        poll = get_object_or_404(Poll, pk=self.kwargs['pk'])
+        poll.delete()
+        return redirect(reverse_lazy('work_detail', kwargs={'pk': poll.scene.work.pk}))
+
+class PostIndexView(ListView):
+    model = Post
+    context_object_name = 'posts'
+    template_name = 'htmls/post_index.html'
+    paginate_by = 20
+    def get_queryset(self):
+        return Post.objects.filter(hide=False).order_by('-pk')
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['recent'] =  timezone.now() - datetime.timedelta(days=3)
+        return context
+
+class PostSearchView(ListView):
+    model = Post
+    context_object_name = 'search_results'
+    template_name = 'htmls/post_index.html'
+    paginate_by = 20
+    def get_queryset(self):
+        query = self.request.GET.get('q')
+        if query:
+            return Post.objects.filter(Q(title__icontains=query) | Q(text__icontains=query)).order_by('-pk')
+        else:
+            return Post.objects.none()
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['post_search'] = 'post_search'
+        context['search_query'] = self.request.GET.get('q', '')
+        return context
+
+class PostDetailView(DetailView):
+    model = Post
+    template_name = 'htmls/post_detail.html'
+    context_object_name = 'post'
+    def get(self, request, *args, **kwargs):
+        post = self.get_object()
+        if post.hide and post.user != self.request.user:
+            return redirect('error')
+        return super().get(request, *args, **kwargs)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        the_post = Post.objects.get(pk=self.kwargs['pk'])
+        if self.request.user.is_authenticated:
+            try:
+                liked = Like.objects.get(user=self.request.user, post=the_post)
+                context['liked'] = liked
+            except Like.DoesNotExist:
+                context['liked'] = None
+        else:
+            context['liked'] = None
+        context['liked_count'] = Like.objects.filter(post=the_post, hide=False).count()
+        return context
+    
+class PostCreateView(MyCreateView):
+    model = Post
+    form_class = PostForm
+    success_url = reverse_lazy('top')
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            return redirect(reverse('post_detail', kwargs={'pk': self.object.pk}))
+        except IntegrityError:
+            return redirect(reverse('error'))
+        
+class WorkDetailPostCreateView(MyCreateView):
+    model = Post
+    form_class = PostForm
+    success_url = reverse_lazy('top')
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        default_work = Work.objects.get(pk=self.kwargs.get('pk'))
+        kwargs['default_work'] = default_work
+        return kwargs
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            return redirect(reverse('post_detail', kwargs={'pk': self.object.pk}))
+        except IntegrityError:
+            return redirect(reverse('error'))
+        
+class PostUpdateView(MyUpdateView, UserCheckMixin):
+    model = Post
+    form_class = PostForm
+    success_url = reverse_lazy('top')
+    def form_valid(self, form):
+        try:
+            response = super().form_valid(form)
+            return redirect(reverse('post_detail', kwargs={'pk': self.kwargs.get('pk')}))
+        except IntegrityError:
+            return redirect(reverse('error'))
+
+class PostDeleteView(LoginRequiredMixin, UserCheckMixin, DeleteView):
+    model = Post
+    template_name = 'htmls/basic_delete.html'
+    context_object_name = 'post'
+    success_url = reverse_lazy('my_page')
+
+class LikeCreateView(LoginRequiredMixin, CreateView):
+    model = Like
+    fields = []
+    template_name = 'htmls/basic_form.html'
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        form.instance.post = Post.objects.get(pk=self.kwargs['pk'])
+        try:
+            if form.instance.post.hide:
+                return redirect('error')
+            if self.request.user.hide_favorite_posts:
+                form.instance.hide = True
+            form.save()
+            return redirect('post_detail', pk=self.kwargs['pk'])
+        except IntegrityError:
+            return redirect('error')
+
+class LikeDeleteView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/basic_delete.html'
+    def get_object(self, queryset=None):
+        return Like.objects.get(user=self.request.user, post__pk=self.kwargs['pk'])
+    def post(self, request, *args, **kwargs):
+        like = get_object_or_404(Like, user=self.request.user, post=Post.objects.get(pk=self.kwargs['pk']))
+        like.delete()
+        return redirect(reverse_lazy('post_detail', kwargs={'pk': self.kwargs['pk']}))
+
+class ReadCreateView(LoginRequiredMixin, CreateView):
+    model = Read
+    fields = []
+    template_name = 'htmls/basic_form.html'
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        form.instance.work = Work.objects.get(pk=self.kwargs['pk'])
+        try:
+            if self.request.user.hide_your_reads:
+                form.instance.hide = True
+            form.save()
+            return redirect('work_detail', pk=self.kwargs['pk'])
+        except IntegrityError:
+            return redirect('error')
+
+class ReadDeleteView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/basic_delete.html'
+    def get_object(self, queryset=None):
+        return Read.objects.get(user=self.request.user, work=Work.objects.get(pk=self.kwargs['pk']))
+    def post(self, request, *args, **kwargs):
+        read = get_object_or_404(Read, user=self.request.user, work=Work.objects.get(pk=self.kwargs['pk']))
+        read.delete()
+        return redirect(reverse_lazy('work_detail', kwargs={'pk': self.kwargs['pk']}))
+    
+class InterestedCreateView(LoginRequiredMixin, CreateView):
+    model = Interested
+    fields = []
+    template_name = 'htmls/basic_form.html'
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        form.instance.work = Work.objects.get(pk=self.kwargs['pk'])
+        try:
+            if self.request.user.hide_your_interesteds:
+                form.instance.hide = True
+            form.save()
+            return redirect('work_detail', pk=self.kwargs['pk'])
+        except IntegrityError:
+            return redirect('error')
+
+class InterestedDeleteView(LoginRequiredMixin, TemplateView):
+    template_name = 'htmls/basic_delete.html'
+    def get_object(self, queryset=None):
+        return Interested.objects.get(user=self.request.user, work=Work.objects.get(pk=self.kwargs['pk']))
+    def post(self, request, *args, **kwargs):
+        interested = get_object_or_404(Interested, user=self.request.user, work=Work.objects.get(pk=self.kwargs['pk']))
+        interested.delete()
+        return redirect(reverse_lazy('work_detail', kwargs={'pk': self.kwargs['pk']}))
+
+class ErrorView(TemplateView):
+    template_name = 'htmls/error.html'
